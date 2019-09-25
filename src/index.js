@@ -115,7 +115,7 @@ slack.on('/crophealth', (_msg, bot) => {
       command: 'health_check'
     }),
     QueueUrl: cropRequestQueueUrl,
-  }
+  };
 
   sqs.sendMessage(reqParams, (reqErr, reqData) => {
     if (reqErr) {
@@ -124,7 +124,7 @@ slack.on('/crophealth', (_msg, bot) => {
       const respParams = {
         QueueUrl: cropResponseQueueUrl,
         WaitTimeSeconds: 20
-      }
+      };
 
       sqs.receiveMessage(respParams, (respErr, respData) => {
         if (respErr) {
@@ -133,6 +133,18 @@ slack.on('/crophealth', (_msg, bot) => {
           for (let message of respData.Messages) {
             if (message.messageId === reqData.messageId) {
               bot.reply(message.Body);
+
+              const deleteParams = {
+                QueueUrl: queueUrl,
+                ReceiptHandle: data.Messages[0].ReceiptHandle
+              };
+
+              sqs.deleteMessage(deleteParams, (deleteErr, _data) => {
+                if (err) {
+                  bot.reply(`There was an error receiveing CROP health status: ${deleteErr}`);
+                }
+              });
+
               return;
             }
           }
