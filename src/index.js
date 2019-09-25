@@ -55,7 +55,7 @@ slack.on('reaction_added', (msg, bot) => {
 });
 
 // Test sending a message to the queue
-slack.on('/sqsSend', (_msg, bot) => {
+slack.on('/sqs-send', (_msg, bot) => {
   const params = {
     MessageBody: JSON.stringify({
       text: "This message was sent to SQS at the date and time attached.",
@@ -74,7 +74,7 @@ slack.on('/sqsSend', (_msg, bot) => {
 });
 
 // Test retrieving, then deleting, a message from the queue
-slack.on('/sqsGet', (_msg, bot) => {
+slack.on('/sqs-get', (_msg, bot) => {
   const params = {
     QueueUrl: queueUrl,
     MaxNumberOfMessages: 1,
