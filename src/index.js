@@ -123,7 +123,7 @@ slack.on('/crophealth', (_msg, bot) => {
     } else {
       const respParams = {
         QueueUrl: cropResponseQueueUrl,
-        WaitTimeSeconds: 20
+        WaitTimeSeconds: 5
       };
 
       sqs.receiveMessage(respParams, (respErr, respData) => {
