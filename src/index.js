@@ -7,7 +7,9 @@ const slack = require('serverless-slack');
 const AWS = require('aws-sdk');
 AWS.config.update({region: 'us-east-2'});
 const sqs = new AWS.SQS({apiVersion: '2012-11-05'});
-const queueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/CROP.fifo"
+const queueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/CROP.fifo";
+const cropRequestQueueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/crop_requests";
+const cropResponseQueueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/crop_responses";
 
 
 // The function that AWS Lambda will call
@@ -101,6 +103,39 @@ slack.on('/sqs-get', (_msg, bot) => {
           bot.reply(`There was an error deleting a message from SQS: ${err}`);
         } else {
           bot.reply("Successfully deleted the last message from SQS.");
+        }
+      });
+    }
+  });
+});
+
+slack.on('/crophealth', (_msg, bot) => {
+  const reqParams = {
+    MessageBody: JSON.stringify({
+      command: 'health_check'
+    }),
+    QueueUrl: cropRequestQueueUrl,
+  }
+
+  sqs.sendMessage(reqParams, (reqErr, reqData) => {
+    if (reqErr) {
+      bot.reply(`There was an error requesting CROP health status: ${reqErr}`);
+    } else {
+      const respParams = {
+        QueueUrl: cropResponseQueueUrl,
+        WaitTimeSeconds: 20
+      }
+
+      sqs.receiveMessage(respParams, (respErr, respData) => {
+        if (respErr) {
+          bot.reply(`There was an error receiveing CROP health status: ${respErr}`);
+        } else {
+          for (let message of respData.Messages) {
+            if (message.messageId === reqData.messageId) {
+              bot.reply(message.Body);
+              return;
+            }
+          }
         }
       });
     }
