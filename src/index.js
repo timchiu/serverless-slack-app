@@ -7,7 +7,7 @@ const slack = require('serverless-slack');
 const AWS = require('aws-sdk');
 AWS.config.update({region: 'us-east-2'});
 const sqs = new AWS.SQS({apiVersion: '2012-11-05'});
-const queueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/CROP.fifo";
+// const queueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/CROP.fifo";
 const cropRequestQueueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/crop_requests";
 const cropResponseQueueUrl = "https://sqs.us-east-2.amazonaws.com/578417282904/crop_responses";
 
@@ -33,7 +33,8 @@ slack.on('/greet', (msg, bot) => {
   };
 
   // ephemeral reply
-  bot.replyPrivate(message);
+  // bot.replyPrivate(message);
+  bot.reply(message);
 });
 
 
@@ -56,63 +57,14 @@ slack.on('reaction_added', (msg, bot) => {
   });
 });
 
-// Test sending a message to the queue
-slack.on('/sqs-send', (_msg, bot) => {
-  const params = {
-    MessageBody: JSON.stringify({
-      text: "This message was sent to SQS at the date and time attached.",
-      date: (new Date()).toISOString()
-    }),
-    QueueUrl: queueUrl
-  };
-
-  sqs.sendMessage(params, (err, data) => {
-    if (err) {
-      bot.reply(`There was an error sending a message to SQS: ${err}`);
-    } else {
-      bot.reply(`Successfully added a message to the SQS queue! Message ID: ${data.MessageId}`);
-    }
-  });
-});
-
-// Test retrieving, then deleting, a message from the queue
-slack.on('/sqs-get', (_msg, bot) => {
-  const params = {
-    QueueUrl: queueUrl,
-    MaxNumberOfMessages: 1,
-    VisibilityTimeout: 0,
-    WaitTimeSeconds: 0
-  };
-
-  sqs.receiveMessage(params, (err, data) => {
-    if (err) {
-      bot.reply(`There was an error retrieving a message from SQS: ${err}`);
-    } else {
-      if (!data.Message) {
-        bot.reply("Nothing to process.");
-        return;
-      }
-      const retrievedMessage = JSON.parse(data.Messages[0].Body);
-      bot.reply(`Message retrieved: ${retrievedMessage}`);
-      const deleteParams = {
-        QueueUrl: queueUrl,
-        ReceiptHandle: data.Messages[0].ReceiptHandle
-      };
-      sqs.deleteMessage(deleteParams, (err, _data) => {
-        if (err) {
-          bot.reply(`There was an error deleting a message from SQS: ${err}`);
-        } else {
-          bot.reply("Successfully deleted the last message from SQS.");
-        }
-      });
-    }
-  });
-});
+const status = value => {
+  return value ? ":sunny:" : ":rain_cloud:"
+}
 
 slack.on('/crophealth', (_msg, bot) => {
   const reqParams = {
     MessageBody: JSON.stringify({
-      command: 'health_check'
+      command: 'health_status'
     }),
     QueueUrl: cropRequestQueueUrl,
   };
@@ -128,25 +80,110 @@ slack.on('/crophealth', (_msg, bot) => {
 
       sqs.receiveMessage(respParams, (respErr, respData) => {
         if (respErr) {
-          bot.reply(`There was an error receiveing CROP health status: ${respErr}`);
+          bot.reply({text: `There was an error receiveing CROP health status: ${respErr}`});  
         } else {
-          for (let message of respData.Messages) {
-            if (message.messageId === reqData.messageId) {
-              bot.reply(message.Body);
-
-              const deleteParams = {
-                QueueUrl: queueUrl,
-                ReceiptHandle: data.Messages[0].ReceiptHandle
-              };
-
-              sqs.deleteMessage(deleteParams, (deleteErr, _data) => {
-                if (err) {
-                  bot.reply(`There was an error receiveing CROP health status: ${deleteErr}`);
+          if (respData.Messages.length > 0) {
+            const retrievedMessage = respData.Messages[0].Body;
+            const body = JSON.parse(retrievedMessage);
+            const crop = status(body['app']['ok']);
+            const dependencies = body['dependencies'];
+            const mapper = status(dependencies['concept_mapper']['ok']);
+            const geneticus = status(dependencies['geneticus']['ok']);
+            const lims = status(dependencies['lims']['ok']);
+            const vdb = status(dependencies['vdb']['ok']);
+            const backoffice = status(dependencies['backoffice']['ok']);
+            const library = status(dependencies['biomed_library']['ok']);
+            const rabbitmq = status(dependencies['rabbitmq']['ok']);
+            const moriarty = status(false);
+            bot.reply({
+              blocks: [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `CROP: ${crop}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `Mapper: ${mapper}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `Geneticus: ${geneticus}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `LIMS: ${lims}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `VDB: ${vdb}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `Backoffice: ${backoffice}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `Library: ${library}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `RabbitMQ: ${rabbitmq}`
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": `Moriarty: ${moriarty}`
+                  },
+                  "accessory": {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "Report",
+                      "emoji": true
+                    },
+                    "value": "click_me_123"
+                  }
                 }
-              });
+              ]
+            });
 
-              return;
-            }
+            // # did not work and kept giving errors.  commenting out for now.
+            // const deleteParams = {
+            //   QueueUrl: queueUrl,
+            //   ReceiptHandle: respData.Messages[0].ReceiptHandle
+            // };
+
+            // sqs.deleteMessage(deleteParams, (deleteErr, _data) => {
+            //   if (deleteErr) {
+            //     bot.reply({text: `There was an error deleting messages from the queue: ${deleteErr}`});
+            //   }
+            // });
+
           }
         }
       });
